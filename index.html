@@ -1,0 +1,196 @@
+<!doctype html>
+<html>
+<head>
+    <title>Latency checker</title>
+</head>
+<body>
+<label for="fps">
+    FPS:
+    <input type="text" id="fps" size="2" maxlength="2" value="25"/>
+</label>
+<br/>
+<label for="dropFrame">
+    Drop frames (%):
+    <input type="text" id="dropFrame" size="2" maxlength="2" value="10"/>
+</label>
+<br/>
+<label for="delay">
+    Delay:
+    <input type="text" id="delay" size="4" maxlength="4" value="500"/> ms
+</label>
+<label for="delayErrorMargin" style="margin-left: 15px;">
+    error margin
+    <input type="text" id="delayErrorMargin" size="2" maxlength="2" value="15"/> %
+</label>
+<br/>
+<input type="button" id="reset" value="Reset test data">
+<br/>
+<input type="button" id="startSimulation" value="Start simulation">
+<input type="button" id="stopSimulation" value="Stop simulation" style="display: none;">
+<br/>
+<span id="lastTimecode" style="font-weight: bold; font-size: 20px; margin-top: 30px;"></span>
+<script src="/socket.io/socket.io.js"></script>
+<script src="https://code.jquery.com/jquery-1.11.1.js"></script>
+<script>
+    window.onload = function(){
+        var socket = io();
+        var resetBtn = document.querySelector('#reset');
+        var startSimulationBtn = document.querySelector('#startSimulation');
+        var stopSimulationBtn = document.querySelector('#stopSimulation');
+        var fpsInput = document.querySelector('#fps');
+        var lastTimecodeElem = document.querySelector('#lastTimecode');
+        var dropFrameInput = document.querySelector('#dropFrame');
+        var delayInput = document.querySelector('#delay');
+        var delayErrorMarginInput = document.querySelector('#delayErrorMargin');
+        var delayBetweenFrames = 1000 / fpsInput.value;
+        var simulationRunning = false;
+        var startSimulationTimestamp = 0;
+        var lastSimulationTimecode = 0;
+        var timecodes = [];
+        window.timecodes = timecodes;
+
+        /*
+         *   RESET FUNCTIONS START
+         */
+
+        // handle the reset btn click
+        resetBtn.addEventListener('click', function(){
+            if(confirm('Are you sure you want to reset this test?')){
+                socket.emit('resetTest');
+            }
+        });
+
+        // handle the reset signal from server
+        socket.on('resetTest', function () {
+            timecodes = [];
+            lastTimecodeElem.innerText = "";
+            console.log("Received reset signal.");
+        });
+
+        /*
+         *   RESET FUNCTIONS STOP
+         */
+
+        /*
+         *   INCOMING TIMECODE MSG FUNCTIONS START
+         */
+
+        function timecodeToMilliseconds(timecodeString){
+            var parts, hh, mm, ss, ff, totalMs;
+            parts = timecodeString.split(".");
+            ff = parts[1];
+            parts = parts[0].split(":");hh = parts[0];
+            mm = parts[1];
+            ss = parts[2];
+            totalMs = ff * delayBetweenFrames;
+            totalMs += ss * 1000;
+            totalMs += mm * 1000 * 60;
+            totalMs += hh * 1000 * 60 * 60;
+            return totalMs;
+        } window.timecodeToMilliseconds = timecodeToMilliseconds;
+
+        socket.on('timecodeMsg', function (msg) {
+            var realDelta, expectedDelta, delay = 0;
+            var lastTimecodeMsg = timecodes.length ? timecodes[timecodes.length - 1] : null;
+            if(lastTimecodeMsg){
+                realDelta = msg.timestamp - lastTimecodeMsg.timestamp;
+                //console.log(lastTimecodeMsg.timestamp, msg.timestamp, realDelta);
+                expectedDelta = timecodeToMilliseconds(msg.timecode) - timecodeToMilliseconds(lastTimecodeMsg.timecode);
+                //console.log(timecodeToMilliseconds(msg.timecode), timecodeToMilliseconds(lastTimecodeMsg.timecode), expectedDelta);
+                console.log(expectedDelta, realDelta);
+            } else {
+                delta = 0;
+            }
+            timecodes.push(msg);
+            lastTimecodeElem.innerText = msg.timecode + ' (' + delta + ')';
+        });
+
+        /*
+         *   INCOMING TIMECODE MSG FUNCTIONS STOP
+         */
+
+        /*
+        *   SIMULATION FUNCTIONS START
+        */
+
+        function millisecondsToTimecode(duration) {
+            var milliseconds = parseInt(duration % 1000);
+            var frames = parseInt(milliseconds / delayBetweenFrames) + 1; // start from frame 1
+            duration -= milliseconds;
+            var seconds = parseInt((duration / 1000) % 60);
+            duration -= seconds;
+            var minutes = parseInt((duration / (1000 * 60)) % 60);
+            duration -= minutes; // this is to prevent an error where low value are encoded like 8.333333333333333e-7
+            var hours = parseInt((duration / (1000 * 60 * 60)) % 24);
+
+            frames = (frames < 10) ? "0" + frames : frames;
+            hours = (hours < 10) ? "0" + hours : hours;
+            minutes = (minutes < 10) ? "0" + minutes : minutes;
+            seconds = (seconds < 10) ? "0" + seconds : seconds;
+
+            return hours + ":" + minutes + ":" + seconds + "." + frames /*+ "." + milliseconds*/;
+        }
+
+        function generateTimecode(timestamp){
+            var deltaTimestamp = 0;
+            if(startSimulationTimestamp === 0){
+                // init timestamp
+                startSimulationTimestamp = timestamp;
+            } else {
+                deltaTimestamp = timestamp - startSimulationTimestamp;
+            }
+            var timecode = millisecondsToTimecode(deltaTimestamp);
+            return timecode;
+        }
+
+        // simulation loop
+        function loop(){
+            if(simulationRunning === false) return false;
+            var timestamp = new Date().getTime();
+            var timecode = generateTimecode(timestamp);
+            if(timecode !== lastSimulationTimecode){
+                lastSimulationTimecode = timecode;
+                // skip a frame
+                var skipFrame = parseInt(Math.random() * 1000) <= dropFrameInput.value;
+                if(!skipFrame) {
+                    setTimeout(function(){
+                    socket.emit('timecodeMsg', timecode);}, 100);
+                }
+            }
+            requestAnimationFrame(loop);
+        }
+
+        // start simulation
+        startSimulationBtn.addEventListener('click', function(){
+            delayBetweenFrames = 1000 / fpsInput.value;
+
+            // start loop
+            simulationRunning = true;
+            loop();
+
+            // toggle buttons
+            stopSimulationBtn.style.display = 'block';
+            startSimulationBtn.style.display = 'none';
+
+
+        });
+
+        // handle stop button
+        stopSimulationBtn.addEventListener('click', function(){
+            // stop loop
+            simulationRunning = false;
+            startSimulationTimestamp = 0;
+
+            // toggle buttons
+            stopSimulationBtn.style.display = 'none';
+            startSimulationBtn.style.display = 'block';
+        });
+
+
+        /*
+         *   SIMULATION FUNCTIONS END
+         */
+    };
+</script>
+</body>
+</html>

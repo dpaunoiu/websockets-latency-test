@@ -14,11 +14,11 @@
     <input type="text" id="dropFrame" size="2" maxlength="2" value="10"/>
 </label>
 <br/>
-<label for="delay">
+<label for="delay" style="display: none;">
     Delay:
     <input type="text" id="delay" size="4" maxlength="4" value="500"/> ms
 </label>
-<label for="delayErrorMargin" style="margin-left: 15px;">
+<label for="delayErrorMargin" style="margin-left: 15px; display: none;">
     error margin
     <input type="text" id="delayErrorMargin" size="2" maxlength="2" value="15"/> %
 </label>
@@ -30,7 +30,7 @@
 <br/>
 <span id="lastTimecode" style="font-weight: bold; font-size: 20px; margin-top: 30px;"></span>
 <script src="/socket.io/socket.io.js"></script>
-<script src="https://code.jquery.com/jquery-1.11.1.js"></script>
+<!--<script src="/chart.js/Chart.bundle.js"></script>-->
 <script>
     window.onload = function(){
         var socket = io();
@@ -87,7 +87,7 @@
             totalMs += mm * 1000 * 60;
             totalMs += hh * 1000 * 60 * 60;
             return totalMs;
-        } window.timecodeToMilliseconds = timecodeToMilliseconds;
+        }
 
         socket.on('timecodeMsg', function (msg) {
             var realDelta, expectedDelta, delay = 0;
@@ -97,12 +97,10 @@
                 //console.log(lastTimecodeMsg.timestamp, msg.timestamp, realDelta);
                 expectedDelta = timecodeToMilliseconds(msg.timecode) - timecodeToMilliseconds(lastTimecodeMsg.timecode);
                 //console.log(timecodeToMilliseconds(msg.timecode), timecodeToMilliseconds(lastTimecodeMsg.timecode), expectedDelta);
-                console.log(expectedDelta, realDelta);
-            } else {
-                delta = 0;
+                console.log("Ideal time since last frame: " + expectedDelta, "Real time since last frame: " + realDelta, "Latency: " + (realDelta - expectedDelta));
             }
             timecodes.push(msg);
-            lastTimecodeElem.innerText = msg.timecode + ' (' + delta + ')';
+            lastTimecodeElem.innerText = msg.timecode + ' (' + (realDelta - expectedDelta) + ')';
         });
 
         /*
@@ -153,8 +151,14 @@
                 // skip a frame
                 var skipFrame = parseInt(Math.random() * 1000) <= dropFrameInput.value;
                 if(!skipFrame) {
+                    /*var delay = parseInt(delayInput.value);
+                    var delayErr = parseFloat(delayErrorMarginInput.value / 100) * parseInt(delayInput.value);
+                    delay += delayErr;
+                    delay -= parseInt(Math.random() * 2 * delayErr);
                     setTimeout(function(){
-                    socket.emit('timecodeMsg', timecode);}, 100);
+                        socket.emit('timecodeMsg', timecode);
+                    }, delay);*/
+                    socket.emit('timecodeMsg', timecode);
                 }
             }
             requestAnimationFrame(loop);

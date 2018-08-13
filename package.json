@@ -1,9 +1,10 @@
 {
-  "name": "socket-chat-example",
+  "name": "websockets-latency-test",
   "version": "0.0.1",
-  "description": "my first socket.io app",
+  "description": "websockets latency test",
   "dependencies": {
-    "express": "^4.15.2",
+    "chart.js": "^2.7.2",
+    "express": "^4.16.3",
     "socket.io": "^2.1.1"
   }
 }

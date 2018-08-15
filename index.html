@@ -8,29 +8,15 @@
     FPS:
     <input type="text" id="fps" size="2" maxlength="2" value="25"/>
 </label>
-<br/>
-<label for="dropFrame">
-    Drop frames (%):
-    <input type="text" id="dropFrame" size="2" maxlength="2" value="10"/>
-</label>
-<br/>
-<label for="delay" style="display: none;">
-    Delay:
-    <input type="text" id="delay" size="4" maxlength="4" value="500"/> ms
-</label>
-<label for="delayErrorMargin" style="margin-left: 15px; display: none;">
-    error margin
-    <input type="text" id="delayErrorMargin" size="2" maxlength="2" value="15"/> %
-</label>
-<br/>
-<input type="button" id="reset" value="Reset test data">
-<br/>
+
+<input type="button" id="reset" value="Reset test data" style="margin-right: 20px; margin-left: 20px;">
+
 <input type="button" id="startSimulation" value="Start simulation">
 <input type="button" id="stopSimulation" value="Stop simulation" style="display: none;">
+
 <br/>
-<span id="lastTimecode" style="font-weight: bold; font-size: 20px; margin-top: 30px;"></span>
+<span id="lastTimecode" style="display: block; font-weight: bold; font-size: 30px; margin-top: 25px;"></span>
 <script src="/socket.io/socket.io.js"></script>
-<!--<script src="/chart.js/Chart.bundle.js"></script>-->
 <script>
     window.onload = function(){
         var socket = io();
@@ -39,15 +25,11 @@
         var stopSimulationBtn = document.querySelector('#stopSimulation');
         var fpsInput = document.querySelector('#fps');
         var lastTimecodeElem = document.querySelector('#lastTimecode');
-        var dropFrameInput = document.querySelector('#dropFrame');
-        var delayInput = document.querySelector('#delay');
-        var delayErrorMarginInput = document.querySelector('#delayErrorMargin');
+        var lastTimecodeObj = {};
         var delayBetweenFrames = 1000 / fpsInput.value;
         var simulationRunning = false;
         var startSimulationTimestamp = 0;
         var lastSimulationTimecode = 0;
-        var timecodes = [];
-        window.timecodes = timecodes;
 
         /*
          *   RESET FUNCTIONS START
@@ -62,7 +44,7 @@
 
         // handle the reset signal from server
         socket.on('resetTest', function () {
-            timecodes = [];
+            lastTimecodeObj = {};
             lastTimecodeElem.innerText = "";
             console.log("Received reset signal.");
         });
@@ -90,17 +72,10 @@
         }
 
         socket.on('timecodeMsg', function (msg) {
-            var realDelta, expectedDelta, delay = 0;
-            var lastTimecodeMsg = timecodes.length ? timecodes[timecodes.length - 1] : null;
-            if(lastTimecodeMsg){
-                realDelta = msg.timestamp - lastTimecodeMsg.timestamp;
-                //console.log(lastTimecodeMsg.timestamp, msg.timestamp, realDelta);
-                expectedDelta = timecodeToMilliseconds(msg.timecode) - timecodeToMilliseconds(lastTimecodeMsg.timecode);
-                //console.log(timecodeToMilliseconds(msg.timecode), timecodeToMilliseconds(lastTimecodeMsg.timecode), expectedDelta);
-                console.log("Ideal time since last frame: " + expectedDelta, "Real time since last frame: " + realDelta, "Latency: " + (realDelta - expectedDelta));
+            lastTimecodeObj = msg;
+            if(msg.timecode) {
+                lastTimecodeElem.innerText = msg.timecode;
             }
-            timecodes.push(msg);
-            lastTimecodeElem.innerText = msg.timecode + ' (' + (realDelta - expectedDelta) + ')';
         });
 
         /*
@@ -137,8 +112,7 @@
             } else {
                 deltaTimestamp = timestamp - startSimulationTimestamp;
             }
-            var timecode = millisecondsToTimecode(deltaTimestamp);
-            return timecode;
+            return millisecondsToTimecode(deltaTimestamp);
         }
 
         // simulation loop
@@ -148,18 +122,7 @@
             var timecode = generateTimecode(timestamp);
             if(timecode !== lastSimulationTimecode){
                 lastSimulationTimecode = timecode;
-                // skip a frame
-                var skipFrame = parseInt(Math.random() * 1000) <= dropFrameInput.value;
-                if(!skipFrame) {
-                    /*var delay = parseInt(delayInput.value);
-                    var delayErr = parseFloat(delayErrorMarginInput.value / 100) * parseInt(delayInput.value);
-                    delay += delayErr;
-                    delay -= parseInt(Math.random() * 2 * delayErr);
-                    setTimeout(function(){
-                        socket.emit('timecodeMsg', timecode);
-                    }, delay);*/
-                    socket.emit('timecodeMsg', timecode);
-                }
+                socket.emit('timecodeMsg', timecode);
             }
             requestAnimationFrame(loop);
         }
@@ -173,7 +136,7 @@
             loop();
 
             // toggle buttons
-            stopSimulationBtn.style.display = 'block';
+            stopSimulationBtn.style.display = 'inline-block';
             startSimulationBtn.style.display = 'none';
 
 
@@ -187,7 +150,7 @@
 
             // toggle buttons
             stopSimulationBtn.style.display = 'none';
-            startSimulationBtn.style.display = 'block';
+            startSimulationBtn.style.display = 'inline-block';
         });
 
 

@@ -1,7 +1,7 @@
 var app = require('express')();
 var http = require('http').Server(app);
 var io = require('socket.io')(http);
-var timecodes = [];
+var lastTimecodeObj = {};
 
 app.get('/', function (req, res) {
     res.sendFile(__dirname + '/index.html');
@@ -9,33 +9,30 @@ app.get('/', function (req, res) {
 
 io.on('connection', function (socket) {
 
-    // when a new clients connects, send the test results so far
-    for(var i = 0; i < timecodes.length; i++){
-        socket.emit('timecodeMsg', timecodes[i]);
-    }
+    // on connection, send timecode to all clients
+    io.emit('timecodeMsg', lastTimecodeObj);
 
     // when a new timecode comes from a client, handle it
     socket.on('timecodeMsg', function (timecode) {
 
-        // add timecode to current test list of timecodes
-        var timecodeObj = {timestamp: new Date().getTime(), timecode: timecode};
-        timecodes.push(timecodeObj);
+        // save last timecode
+        lastTimecodeObj = {timestamp: new Date().getTime(), timecode: timecode};
 
-        // send timecodes to all clients
-        io.emit('timecodeMsg', timecodeObj);
+        // send timecode to all clients
+        io.emit('timecodeMsg', lastTimecodeObj);
     });
 
-    // when the reset signal comes, reset the current test without restarting the server
+    // when the reset signal comes, reset the current test data
     socket.on('resetTest', function(msg){
         console.log("Test has been reset.");
-        timecodes = [];
+        lastTimecodeObj = {};
 
         // send reset signal to all clients
         io.emit('resetTest');
     });
 });
 
-
-http.listen(3000, function () {
-    console.log('listening on *:3000');
+var port = 3000;
+http.listen(port, function () {
+    console.log('listening on *:' + port);
 });
